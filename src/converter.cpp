@@ -56,19 +56,25 @@ class PointCloudConverter
     string points_in_, points2_in_, points_out_, points2_out_;
 
   public:
-    PointCloudConverter () : nh_ ("~"), queue_size_ (100), 
-                             points_in_ ("/points_in"), points2_in_ ("/points2_in"), 
-                             points_out_ ("/points_out"), points2_out_ ("/points2_out")
+    PointCloudConverter (const std::string &intopic, bool ispc) : nh_ ("~"), queue_size_ (100)
     {
-      // Subscribe to the cloud topic using both the old message format and the new
-      sub_points_ = nh_.subscribe (points_in_, queue_size_, &PointCloudConverter::cloud_cb_points, this);
-      sub_points2_ = nh_.subscribe (points2_in_, queue_size_, &PointCloudConverter::cloud_cb_points2, this);
-      pub_points_ = nh_.advertise<sensor_msgs::PointCloud> (points_out_, queue_size_);
-      pub_points2_ = nh_.advertise<sensor_msgs::PointCloud2> (points2_out_, queue_size_);
-      ROS_INFO ("PointCloudConverter initialized to transform from PointCloud (%s) to PointCloud2 (%s).", nh_.resolveName (points_in_).c_str (), nh_.resolveName (points2_out_).c_str ());
-      ROS_INFO ("PointCloudConverter initialized to transform from PointCloud2 (%s) to PointCloud (%s).", nh_.resolveName (points2_in_).c_str (), nh_.resolveName (points_out_).c_str ());
+      if (ispc) {
+        points_in_ = intopic;
+        points2_out_ = "/points2_out";
+        // Subscribe to the cloud topic using both the old message format and the new
+        sub_points_ = nh_.subscribe (points_in_, queue_size_, &PointCloudConverter::cloud_cb_points, this);
+        pub_points2_ = nh_.advertise<sensor_msgs::PointCloud2> (points2_out_, queue_size_);
+        ROS_INFO ("PointCloudConverter initialized to transform from PointCloud (%s) to PointCloud2 (%s).",
+            nh_.resolveName (points_in_).c_str (), nh_.resolveName (points2_out_).c_str ());
+      } else {
+        points2_in_ = intopic;
+        points_out_ = "/points_out";
+        sub_points2_ = nh_.subscribe (points2_in_, queue_size_, &PointCloudConverter::cloud_cb_points2, this);
+        pub_points_ = nh_.advertise<sensor_msgs::PointCloud> (points_out_, queue_size_);
+        ROS_INFO ("PointCloudConverter initialized to transform from PointCloud2 (%s) to PointCloud (%s).",
+            nh_.resolveName (points2_in_).c_str (), nh_.resolveName (points_out_).c_str ());
+      }
     }
-    
 
     inline std::string
       getFieldsList (const sensor_msgs::PointCloud2 &cloud)
@@ -142,10 +148,21 @@ class PointCloudConverter
 int
   main (int argc, char** argv)
 {
+  if (argc < 2) {
+    std::cerr << "Usage: " << argv[0] << " <pointcloudtopic> [in pointcloud(1, default) or in pointcloud2(0)]";
+    return 1;
+  }
+  std::string pctopic = argv[1];
+
+  bool ispc = true;
+  if (argc > 2) {
+    int c = std::stoi(argv[2]);
+    ispc = c;
+  }
+
   // ROS init
   ros::init (argc, argv, "point_cloud_converter", ros::init_options::AnonymousName);
-
-  PointCloudConverter p;
+  PointCloudConverter p(pctopic, ispc);
   ros::spin ();
 
   return (0);
